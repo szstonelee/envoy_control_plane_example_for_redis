@@ -1,4 +1,4 @@
-# Stone Lee test for envoy-contro-plane
+# Stone Lee test for envoy-contro-plane in Redis
 
 首先编译control plane，这里copy了网上一个[envoy control plane example](https://github.com/mnaboka/envoy-control-plane-example)，因为它的cli工具很方便
 ```
@@ -48,29 +48,29 @@ envoy --bootstrap-version 2 -c b.yaml
 ```
 http://192.168.64.4:8001/
 ```
-这里的ip是你的envoy的ip，NOTE: 这个IP和control plane没有关系，如果让envoy连到其他地址的control plane，下盖b.yaml中```port_value: 5678```上面一行ip地址
+这里的ip是你的envoy的ip，NOTE: 这个IP和control plane没有关系，如果让envoy连到其他地址的control plane，修改b.yaml中```port_value: 5678```上面一行ip地址
 
 然后，可以在浏览器里点看clusters
 ```
 http://192.168.64.4:8001/clusters
 ```
 
-然后，你需要用本工程的cli.sh加入cluster和endpoint参数，具体如下
+然后，你需要用本工程的cli.sh加入cluster和endpoint这些运行参数数据，具体如下
 ```
 ./cli.sh cluster add redis_cluster 127.0.0.1 anything
 ./cli.sh endpoint add redis_cluster 127.0.0.1 6001
 ./cli.sh commit
 ```
 
-如果每天命令成功，你都可以看到HTTP的response是200， ```HTTP/1.1 200 OK```
+如果每条命令成功，你都可以看到HTTP的response是200， ```HTTP/1.1 200 OK```
 
-我们就设置了一个redis_cluster和一个Redis endpoint监听在6001口
+我们就设置了一个redis_cluster和一个Redis Server endpoint监听在6001口
 
 如果此时我们用redis-cli连接envoy，由于envoy已经监听在6379端口（详细见b.yaml），我们发现连接可以连上
 ```
 redis-cli 192.168.64.4
 ```
-上面的IP是你的envoy启动的IP，一般情况下，应该和你的客户端, i.e., redis-cli，放在一起
+上面的IP是你的envoy启动的IP，一般情况下，应该和你的客户端, i.e., redis-cli，放在一起（这样，redis-cli命令就是```redis-cli```）
 
 然后你试着在redis-cli执行命令，例如：get key_abc
 
@@ -86,7 +86,7 @@ redis-server --port 6001
 
 这时，你再在redis-cli里执行```get key_abc```，结果会是```(nil)```（或有效值，取决你的redis-server是否缓存），这说明Redis命令执行成功
 
-你可以继续用上面的方式，简历M个envoy，和N个Redis-server，都在redis-cluster下，这样，就组成了一个mesh service for Redis
+你可以继续用上面的方式，建立M个envoy，和N个Redis-server(形成M*N的矩阵)，都在redis-cluster这个集群下（有兴趣，还可以建立多个redis clusters），这样，就组成了一个mesh service for Redis
 
 以上的所有都基于Envoy的V2协议，新的Envoy，包括[control plane](https://github.com/envoyproxy/go-control-plane), [Envoy config](https://www.envoyproxy.io/docs/envoy/latest/configuration/configuration)都升级为V3协议（而且强制，当前其文档也比较混乱，比如：Redis如何配置），很多资料网上不足，更重要的是，go control plane example没有支持REST，所以操作起来很不方便，未来等相关社区的工具、文档都针对V3齐备后，情况会好些。
 
