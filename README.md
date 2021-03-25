@@ -86,6 +86,8 @@ redis-server --port 6001
 
 这时，你再在redis-cli里执行```get key_abc```，结果会是```(nil)```（或有效值，取决你的redis-server是否缓存），这说明Redis命令执行成功
 
+NOTE: 真正的生产环境，你应该先启动redis-server，然后再用cli.sh去做配置，上面的示范只是让你更了解整个体系
+
 你可以继续用上面的方式，建立M个envoy，和N个Redis-server(形成M*N的矩阵)，都在redis-cluster这个集群下（有兴趣，还可以建立多个redis clusters），这样，就组成了一个mesh service for Redis
 
 以上的所有都基于Envoy的V2协议，新的Envoy，包括[control plane](https://github.com/envoyproxy/go-control-plane), [Envoy config](https://www.envoyproxy.io/docs/envoy/latest/configuration/configuration)都升级为V3协议（而且强制，当前其文档也比较混乱，比如：Redis如何配置），很多资料网上不足，更重要的是，go control plane example没有支持REST，所以操作起来很不方便，未来等相关社区的工具、文档都针对V3齐备后，情况会好些。
