@@ -16,16 +16,20 @@
 
 ### 下载源码和编译（需要Golang支持）
 
+参考：[Golang下载和安装](https://golang.org/dl/)
+
 首先编译control plane，这里copy了网上一个[envoy control plane example](https://github.com/mnaboka/envoy-control-plane-example)，因为它的**cli.sh**工具很方便
 
 在control plane专用机器上，比如：192.168.0.11
 ```
-git clone https://hub.fastgit.org/szstonelee/envoy_control_plane_example_for_redis
+git clone https://github.com/szstonelee/envoy_control_plane_example_for_redis
 cd envoy_control_plane_example_for_redis
-cd cmd/control-plan
+cd cmd/control-plane
 go build -o controlplane main.go callbacks.go 
 ./controlplane
 ```
+
+上面也可以用https://hub.fastgit.org/szstonelee/envoy_control_plane_example_for_redis，这个镜像站点
 
 You can see the following output
 ```
