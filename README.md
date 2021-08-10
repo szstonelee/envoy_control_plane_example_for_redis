@@ -2,7 +2,7 @@
 
 ## 前言
 
-这里是基于[Envoy](https://envoyproxy.io/)这个代理工具，然后用一个最简模式的[Control Plane](https://hub.fastgit.org/envoyproxy/go-control-plane)，实现Redis（以及BunnyRedis）的Auto Rebalance和Auto Failover。
+这里是基于[Envoy](https://envoyproxy.io/)这个代理工具，然后用一个最简模式的[Control Plane](https://hub.fastgit.org/envoyproxy/go-control-plane)，实现Redis（以及[BunnyRedis](https://hub.fastgit.org/szstonelee/bunnyredis/wiki)）的Auto Rebalance和Auto Failover。
 
 这涉及下面几个知识点：
 
@@ -108,15 +108,12 @@ envoy --bootstrap-version 2 -c b.yaml
 
 ### 测试Envoy proxy
 
-然后，可以在浏览器里点看clusters
-```
-http://192.168.0.22:8001/clusters
-http://192.168.0.33:8001/clusters
-```
+假设，我们在192.168.0.11上安装了Envoy。然后，可以在浏览器里点看clusters
 
-或者查看Envoy proxy输出的控制台WEB界面
+查看Envoy proxy输出的控制台WEB界面
 ```
-http://192.168.0.22:8001
+http://192.168.0.11:8001
+
 ```
 
 ## 用cli.sh工具管理整个集群（增加、删除bunny-redis服务器）
@@ -125,17 +122,21 @@ http://192.168.0.22:8001
 
 在本工程里，根目录下，有一个cli.sh工具，可以用于管理整个集群。
 
+这个shell脚本不过是包装了REST接口，你也可以参考cli.sh里的内容写自己的脚本，或者直接curl都可以。
+
 当你新增一个bunny-redis进程到BunnyRedis系统里，需要通过这个cli.sh，在controlplane加入meta data，让所有的Envoy proxy都自动获知集群的变化。
 
-这个工具将用于control plane里对集群的管理，包括：设置cluster、bunny-redis server endpoint
+这个工具将用于control plane里对集群的管理，包括：设置cluster、增删bunny-redis endpoint
 
 同时，我们这个cli.sh是假设和control plane运行在同一机器上（即192.168.0.11）。如果想用cli.sh用于其他机器上，请修改cli.sh文件。
 
 ### 操作范例
 
-为了简单，我们假设布置BunnyRedis中的bunny-redis集群也运行在192.168.0.22和192.168.0.33机器上，即Redis client、Envoy proxy、bunny-redis都位于同一机器上。由于Envoy proxy已经监听于6379端口，所以，我们需要给bunny-redis一个新的端口6380。
+为了简单，我们假设布置BunnyRedis中的bunny-redis集群运行在192.168.0.22和192.168.0.33机器上，
 
-实际生产环境中，bunny-redis很可能位于单独的机器上，这样，bunny-redis也可以监听于6379这个缺省Redis端口上。大家可以修改下面相应的参数。
+而Redis client(我们下面用redis-cli)、Envoy proxy、contrrol plane运行在192.168.0.11上。
+
+集群bunny-redis运行在192.168.0.22和192.168.0.33这两台机器上。这样，bunny-redis可以监听缺省端口6379，和Envoy proxy监听的6379端口不冲突，因为机器IP不同。
 
 然后，你需要用本工程的cli.sh加入cluster和endpoint这些运行参数数据，具体如下
 
@@ -167,10 +168,12 @@ http://192.168.0.22:8001
 
 ### 先测试Envoy proxy
 
-如果此时我们用redis-cli连接Envoy proxy，由于Envoy proxy已经监听在6379端口（详细见b.yaml），我们发现连接可以连上
+在192.168.0.11这台安装了Envoy的机器，即Envoy proxy作为本机redis-cli的side-car，由于Envoy proxy已经监听在6379端口（详细见b.yaml），我们发现连接可以连上
 ```
 redis-cli 
 ```
+
+如果可以连上，说明Envvoy proxy运行OK。即Envoy proxy接受了6379端口的连接。
 
 ### 再测试control plane
 
