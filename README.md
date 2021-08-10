@@ -12,6 +12,8 @@
 4. 运行集群服务器
 5. 相关测试
 
+注意：Envoy对于Redis的命令不是全部支持，详细可参考：https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/other_protocols/redis
+
 ## 下载Control Plane和编译
 
 ### 下载源码和编译（需要Golang支持）
@@ -31,11 +33,12 @@ go build -o controlplane main.go callbacks.go
 
 上面也可以用https://hub.fastgit.org/szstonelee/envoy_control_plane_example_for_redis，这个镜像站点
 
-You can see the following output
+然后你可以看到下面的输出
 ```
 INFO[0000] Starting API server on 0.0.0.0:8000
 INFO[0000] Starting a server on 0.0.0.0:5678
 ```
+请保持你controlplane进程作为服务一直运行（如果死了，重新启动即可）
 
 controlplane提供两个服务接口，一个是REST，端口8000，一个是gRPC，端口5678
 
@@ -67,7 +70,7 @@ source ~/.bashrc
 
 具体rpm安装包下载地址见：https://cloudsmith.io/~tetrate/repos/getenvoy-rpm-stable/packages/
 
-安装如下
+安装Envoy 1.17，如下
 
 ```
 wget https://rpm.dl.getenvoy.io/public/rpm/any-distro/any-version/x86_64/getenvoy-envoy-1.17.1.p0.gd6a4496-1p74.gbb8060d.x86_64.rpm
@@ -81,7 +84,7 @@ envoy --version
 
 ### 启动Envoy proxy和相关配置
 
-下面我们要启动一个Envoy作为proxy代理服务器，让其支持Redis，并连接到dynamic resource，i.e., the above control plane
+下面我们要启动一个Envoy 1.17作为proxy代理服务器，让其支持Redis，并连接到dynamic resource，i.e., the above control plane
 
 Envony prox的配至文件
 ```
@@ -92,17 +95,11 @@ Envony prox的配至文件
 
 在b.yaml文件里，请找到
 ```
-                address: 127.0.0.1
-                port_value: 5678
-```
-
-然后，请在各个Envoy proxy机器上（本例中的192.168.0.22和192.168.0.33）的，修改这个b.yaml文件这两行，如上例中，control plane装在192.168.0.11这机器上，请修改如下
-```
                 address: 192.168.0.11
                 port_value: 5678
 ```
 
-请参考本project里根目录下的b.yaml，是一个为Envoy proxy配置的支持dynamic control plane 和 Redis协议的yaml
+如果需要，请修改上面的address，设置为control plane进程运行的机器的IP。（本例中是192.168.0.11）
 
 由于Envoy(1.17)在2021年初已经全面启动V3协议，所以很多事情很麻烦（我们这个project是用的V2协议），但还好当前Envoy proxy是兼容V2的。所以，我们启动Envoy proxy用如下的命令
 ```
@@ -114,16 +111,23 @@ envoy --bootstrap-version 2 -c b.yaml
 然后，可以在浏览器里点看clusters
 ```
 http://192.168.0.22:8001/clusters
-http://192.168.0.33:8001/clusterss
+http://192.168.0.33:8001/clusters
 ```
 
-## control plane自带的cli.sh工具
+或者查看Envoy proxy输出的控制台WEB界面
+```
+http://192.168.0.22:8001
+```
+
+## 用cli.sh工具管理整个集群（增加、删除bunny-redis服务器）
 
 ### 说明
 
-这个工具将用于control plane里对集群的管理，包括：设置cluster、bunny-redis server endpoint
+在本工程里，根目录下，有一个cli.sh工具，可以用于管理整个集群。
 
-请参考本工程的根目录下的cli.sh文件
+当你新增一个bunny-redis进程到BunnyRedis系统里，需要通过这个cli.sh，在controlplane加入meta data，让所有的Envoy proxy都自动获知集群的变化。
+
+这个工具将用于control plane里对集群的管理，包括：设置cluster、bunny-redis server endpoint
 
 同时，我们这个cli.sh是假设和control plane运行在同一机器上（即192.168.0.11）。如果想用cli.sh用于其他机器上，请修改cli.sh文件。
 
@@ -134,16 +138,30 @@ http://192.168.0.33:8001/clusterss
 实际生产环境中，bunny-redis很可能位于单独的机器上，这样，bunny-redis也可以监听于6379这个缺省Redis端口上。大家可以修改下面相应的参数。
 
 然后，你需要用本工程的cli.sh加入cluster和endpoint这些运行参数数据，具体如下
+
+我们先加入集群名字bunny_redis_cluster（注意：和b.yaml里的要匹配），然后加入一个192.168.0.22的bunny-redis服务器
 ```
-./cli.sh cluster add bunny_redis_cluster
-./cli.sh endpoint add bunny_redis_cluster 192.168.0.22 6380
-./cli.sh endpoint add bunny_redis_cluster 192.168.0.33 6380
+./cli.sh cluster add bunny_redis_cluster br
+./cli.sh endpoint add bunny_redis_cluster 192.168.0.22 6379
 ./cli.sh commit
 ```
 
 如果每条命令成功，你都可以看到HTTP的response是200， ```HTTP/1.1 200 OK```
 
-我们就设置了一个redis_cluster和一个Redis server（或者[BunnyRedis](github.com/szstonelee/bunnyredis/wiki)的bunny-redis进程） endpoint监听在6001口
+如果我们又启动了一个192.168.0.33的bunny-redis机器，我们可以直接用下面的命令加入这个IP到control plane
+```
+./cli.sh endpoint add bunny_redis_cluster 192.168.0.33 6379
+./cli.sh commit
+```
+
+如果我们发现192.168.0.22上的bunny-redis死了，我们需要用工具删除之
+```
+./cli.sh endpoint remove bunny_redis_cluster 192.168.0.22 6379
+./cli.sh commit
+```
+注意：如果不删除，那么Redis client会每条命令，都round robin都一个bunny-redis服务器上，导致坏的那个执行失败。
+
+至于如何做health check，以及如何固定一个Redis TCP连接，我想等Envoy V3的control plane稳定后再说，现在官网的文档一塌糊涂，我试了很多，都不知如何操作。未来等Envoy V3的文档和范例齐备了，或者有兴趣的同学，也可以做尝试解决这个问题。
 
 ## 测试Envoy proxy以及control plane
 
@@ -151,13 +169,7 @@ http://192.168.0.33:8001/clusterss
 
 如果此时我们用redis-cli连接Envoy proxy，由于Envoy proxy已经监听在6379端口（详细见b.yaml），我们发现连接可以连上
 ```
-redis-cli 192.168.64.4
-```
-上面的IP是你的Envoy proxy启动的IP。
-
-一般情况下，应该Envoy proxy和你的Redis客户端程序（例如：redis-cli）放在一台机器上，成为side-car模式, 这样，redis-cli命令就可以简化为
-```
-redis-cli
+redis-cli 
 ```
 
 ### 再测试control plane
@@ -169,14 +181,11 @@ redis-cli
 (error) no upstream host
 ```
 
-这是因为Envoy系统里对应的Redis Server endpoint还没有启动，你需要根据你上面的./cli.sh命令，在合适的IP上启动redis-server，如下
-```
-redis-server --port 6001
-```
+这是因为Envoy系统里对应的Redis Server endpoint还没有启动，你需要根据你上面的./cli.sh命令，在合适的IP上启动bunny-redis进程，启动帮助可参考：
 
-这时，你再在redis-cli里执行```get key_abc```，结果会是```(nil)```（或有效值，取决你的redis-server是否缓存），这说明Redis命令执行成功
+[如何启动bunny-redis](https://hub.fastgit.org/szstonelee/bunnyredis/wiki/BunnyRedis-startup)
 
-NOTE: 真正的生产环境，你应该先启动redis-server，然后再用cli.sh去做配置，上面的示范只是让你更了解整个体系
+这时，你再在redis-cli里执行```get key_abc```，结果会是```(nil)```（或有效值，取决你的之前bunny-redis是否缓存），这说明Redis命令执行成功
 
 你可以继续用上面的方式，建立M个envoy，和N个Redis-server(形成M*N的矩阵)，都在redis-cluster这个集群下（有兴趣，还可以建立多个redis clusters），这样，就组成了一个mesh service for Redis
 
