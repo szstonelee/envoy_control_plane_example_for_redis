@@ -63,22 +63,20 @@ source ~/.bashrc
 
 ### 安装Envoy
 
-在各个Redis client机器上（比如：192.168.0.22， 192.168.0.33）上，安装Envoy proxy
+注意：Envoy 1.8以上版本不再支持V2协议，所以，我们用这个control plane工具，必须安装1.7和之前版本，
 
-我们将Envoy proxy和Redis client装在同一台机器上，做成side-car模式，这也是推荐的模式（分开也可以，但不推荐）
+具体rpm安装包下载地址见：https://cloudsmith.io/~tetrate/repos/getenvoy-rpm-stable/packages/
 
-请参考[Envoy官网的Envoy安装说明](https://www.envoyproxy.io/docs/envoy/latest/start/install)
+安装如下
 
-https://www.envoyproxy.io/docs/envoy/latest/start/install
-
-对于CentOS
 ```
-sudo yum install yum-utils
-sudo rpm --import 'https://rpm.dl.getenvoy.io/public/gpg.CF716AF503183491.key'
-curl -sL 'https://rpm.dl.getenvoy.io/public/config.rpm.txt?distro=el&codename=7' > /tmp/tetrate-getenvoy-rpm-stable.repo
-sudo yum-config-manager --add-repo '/tmp/tetrate-getenvoy-rpm-stable.repo'
-sudo yum makecache --disablerepo='*' --enablerepo='tetrate-getenvoy-rpm-stable'
-sudo yum install getenvoy-envoy
+wget https://rpm.dl.getenvoy.io/public/rpm/any-distro/any-version/x86_64/getenvoy-envoy-1.17.1.p0.gd6a4496-1p74.gbb8060d.x86_64.rpm
+yum localinstall getenvoy-envoy-1.17.1.p0.gd6a4496-1p74.gbb8060d.x86_64.rpm
+```
+
+安装完后，请检查envoy版本号是1.17
+```
+envoy --version
 ```
 
 ### 启动Envoy proxy和相关配置
